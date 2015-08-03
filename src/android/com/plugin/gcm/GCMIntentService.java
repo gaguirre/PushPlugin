@@ -12,6 +12,14 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+
+import java.net.URL;
+import java.net.HttpURLConnection;
+import java.io.InputStream;
+import java.io.IOException;
+
 
 import com.google.android.gcm.GCMBaseIntentService;
 
@@ -98,9 +106,12 @@ public class GCMIntentService extends GCMBaseIntentService {
 			} catch (NumberFormatException e) {}
 		}
 
+		Bitmap largeIcon = getBitmapFromURL(extras.getString("image"));
+
 		NotificationCompat.Builder mBuilder =
 			new NotificationCompat.Builder(context)
 				.setDefaults(defaults)
+				.setLargeIcon(largeIcon)
 				.setSmallIcon(context.getApplicationInfo().icon)
 				.setWhen(System.currentTimeMillis())
 				.setContentTitle(extras.getString("title"))
@@ -143,6 +154,21 @@ public class GCMIntentService extends GCMBaseIntentService {
 					.getApplicationLabel(context.getApplicationInfo());
 
 		return (String)appName;
+	}
+
+	public Bitmap getBitmapFromURL(String strURL) {
+    try {
+        URL url = new URL(strURL);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setDoInput(true);
+        connection.connect();
+        InputStream input = connection.getInputStream();
+        Bitmap myBitmap = BitmapFactory.decodeStream(input);
+        return myBitmap;
+    } catch (IOException e) {
+        e.printStackTrace();
+        return null;
+    }
 	}
 
 	@Override
