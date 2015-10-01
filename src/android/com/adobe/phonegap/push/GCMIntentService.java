@@ -11,10 +11,17 @@ import android.content.SharedPreferences;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.Bitmap.Config;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
 import android.support.v4.app.NotificationCompat;
 import android.text.Html;
 import android.util.Log;
@@ -88,7 +95,7 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
         Bundle extras = intent.getExtras();
         if (extras != null) {
             // if we are in the foreground, just surface the payload, else post it to the statusbar
-            if (PushPlugin.isInForeground() || "true".equals(extras.getString("silent"))) {
+            if (PushPlugin.isInForeground() || "true".equals(getString(extras, SILENT))) {
                 extras.putBoolean(FOREGROUND, PushPlugin.isInForeground());
                 PushPlugin.sendExtras(extras);
             }
@@ -152,7 +159,7 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
          * To use, add the `iconColor` key to plugin android options
          *
          */
-        setNotificationIconColor(getString(extras,"color"), mBuilder, localIconColor);
+        setNotificationIconColor(getString(extras, ICON_COLOR), mBuilder, localIconColor);
 
         /*
          * Notification Icon
@@ -420,7 +427,10 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
         String gcmLargeIcon = getString(extras, IMAGE); // from gcm
         if (gcmLargeIcon != null) {
             if (gcmLargeIcon.startsWith("http://") || gcmLargeIcon.startsWith("https://")) {
-                mBuilder.setLargeIcon(getBitmapFromURL(gcmLargeIcon));
+                Bitmap bitmap = getBitmapFromURL(gcmLargeIcon);
+                boolean circle = "true".equals(getString(extras, ICON_CIRCLE));
+                bitmap = formatLargeIcon(bitmap, circle);
+                mBuilder.setLargeIcon(bitmap);
                 Log.d(LOG_TAG, "using remote large-icon from gcm");
             } else {
                 AssetManager assetManager = getAssets();
@@ -443,6 +453,67 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
                 }
             }
         }
+    }
+
+    private Bitmap formatLargeIcon(Bitmap bitmap, boolean circle) {
+        bitmap = resizeBitmap(bitmap);
+        Bitmap output = Bitmap.createBitmap(bitmap.getWidth(),
+                bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(output);
+
+        final int size = Math.min(bitmap.getWidth(), bitmap.getHeight());
+        final Paint paint = new Paint();
+
+        int left = 0;
+        int top = 0;
+        int right = size;
+        int bottom = size;
+
+        if (bitmap.getWidth() > bitmap.getHeight()) {
+            left = bitmap.getWidth() / 2 - size / 2;
+            right = left + size;
+        } else {
+            top = bitmap.getHeight() / 2 - size / 2;
+            bottom = top + size;
+        }
+
+        final Rect rect = new Rect(left, top, right, bottom);
+
+        paint.setAntiAlias(true);
+        canvas.drawARGB(0, 0, 0, 0);
+
+        if (circle && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            canvas.drawCircle(bitmap.getWidth() / 2, bitmap.getHeight() / 2, size / 2, paint);
+        } else {
+            canvas.drawRect(rect, paint);
+        }
+
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        canvas.drawBitmap(bitmap, rect, rect, paint);
+
+        return output;
+    }
+
+    private Bitmap resizeBitmap(Bitmap bmp) {
+        final int minWidth = 96;
+        final int minHeight = 96;
+        int width = bmp.getWidth();
+        int height = bmp.getHeight();
+
+        if (width > height) {
+            int ratio = height / minHeight;
+            height = minHeight;
+            width = width / ratio;
+        } else if (height > width) {
+            int ratio = width / minWidth;
+            width = minWidth;
+            height = height / ratio;
+        } else {
+            height = minHeight;
+            width = minWidth;
+        }
+
+        return Bitmap.createScaledBitmap(bmp, width, height, true);
     }
 
     private void setNotificationSmallIcon(Context context, Bundle extras, String packageName, Resources resources, NotificationCompat.Builder mBuilder, String localIcon) {

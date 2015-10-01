@@ -4,11 +4,13 @@ public interface PushConstants {
     public static final String COM_ADOBE_PHONEGAP_PUSH = "com.adobe.phonegap.push";
     public static final String REGISTRATION_ID = "registrationId";
     public static final String FOREGROUND = "foreground";
+    public static final String SILENT = "silent";
     public static final String TITLE = "title";
     public static final String NOT_ID = "notId";
     public static final String PUSH_BUNDLE = "pushBundle";
     public static final String ICON = "icon";
     public static final String ICON_COLOR = "iconColor";
+    public static final String ICON_CIRCLE = "iconCircle";
     public static final String SOUND = "sound";
     public static final String VIBRATE = "vibrate";
     public static final String ACTIONS = "actions";
