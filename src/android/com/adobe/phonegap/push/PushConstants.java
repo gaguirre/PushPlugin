@@ -20,6 +20,9 @@ public interface PushConstants {
     public static final String VIBRATION_PATTERN = "vibrationPattern";
     public static final String STYLE = "style";
     public static final String SUMMARY_TEXT = "summaryText";
+    public static final String SUMMARY_TITLE = "summaryTitle";
+    public static final String SUMMARIZE = "summarize";
+    public static final String SUMMARY_MESSAGE = "summaryMessage";
     public static final String PICTURE = "picture";
     public static final String GCM_NOTIFICATION = "gcm.notification";
     public static final String MESSAGE = "message";

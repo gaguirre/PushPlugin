@@ -45,6 +45,8 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
 
     private static final String LOG_TAG = "PushPlugin_GCMIntentService";
     private static HashMap<Integer, ArrayList<String>> messageMap = new HashMap<Integer, ArrayList<String>>();
+    private boolean summarize = false;
+    private boolean shouldSummarize = false;
 
     public void setNotification(int notId, String message){
         ArrayList<String> messageList = messageMap.get(notId);
@@ -146,6 +148,11 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
         Log.d(LOG_TAG, "stored sound=" + soundOption);
         Log.d(LOG_TAG, "stored vibrate=" + vibrateOption);
 
+        ArrayList messageList = messageMap.get(notId);
+
+        summarize = "true".equals(getString(extras, SUMMARIZE));
+        shouldSummarize = summarize && messageList != null && messageList.size() > 0;
+
         /*
          * Notification Vibration
          */
@@ -173,7 +180,8 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
          * If no resource is found, falls
          *
          */
-        setNotificationSmallIcon(context, extras, packageName, resources, mBuilder, localIcon);
+        String iconUri = getString(extras, ICON);
+        setNotificationSmallIcon(context, iconUri, packageName, resources, mBuilder, localIcon);
 
         /*
          * Notification Large-Icon
@@ -187,7 +195,10 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
          * - if none, we don't set the large icon
          *
          */
-        setNotificationLargeIcon(extras, packageName, resources, mBuilder);
+        if (!shouldSummarize) {
+            String largeIconUri = getString(extras, IMAGE); // from gcm
+            setNotificationLargeIcon(largeIconUri, packageName, resources, mBuilder);
+        }
 
         /*
          * Notification Sound
@@ -278,74 +289,108 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
 
     private void setNotificationMessage(int notId, Bundle extras, NotificationCompat.Builder mBuilder) {
         String message = getMessageText(extras);
+        String title = getString(extras, TITLE, "");
 
         String style = getString(extras, STYLE, STYLE_TEXT);
-        if(STYLE_INBOX.equals(style)) {
-            setNotification(notId, message);
 
-            mBuilder.setContentText(message);
+        if (summarize) {
+            String defaultSummaryMessage = "".equals(title) ? message : (title + ": " + message);
+            setNotification(notId, getString(extras, SUMMARY_MESSAGE, defaultSummaryMessage));
+        }
 
-            ArrayList<String> messageList = messageMap.get(notId);
-            Integer sizeList = messageList.size();
-            if (sizeList > 1) {
-                String sizeListMessage = sizeList.toString();
-                String stacking = sizeList + " more";
-                if (getString(extras, SUMMARY_TEXT) != null) {
-                    stacking = getString(extras, SUMMARY_TEXT);
-                    stacking = stacking.replace("%n%", sizeListMessage);
+        ArrayList<String> messageList = messageMap.get(notId);
+        Integer sizeList = messageList == null ? 0 : messageList.size();
+
+        if (shouldSummarize) {
+            String summaryTitle = getString(extras, SUMMARY_TITLE, getAppName(this));
+
+            String stacking = getString(extras, SUMMARY_TEXT, "");
+            stacking = stacking.replace("%n%", sizeList.toString());
+
+            NotificationCompat.InboxStyle notificationInbox = new NotificationCompat.InboxStyle()
+                    .setBigContentTitle(summaryTitle);
+
+            if (!"".equals(stacking)) {
+                notificationInbox.setSummaryText(stacking);
+                mBuilder.setContentText(stacking);
+            }
+
+            for (int i = messageList.size() - 1; i >= 0; i--) {
+                notificationInbox.addLine(Html.fromHtml(messageList.get(i)));
+            }
+
+            mBuilder.setStyle(notificationInbox).setContentTitle(summaryTitle);
+        } else {
+
+            if (STYLE_INBOX.equals(style)) {
+                setNotification(notId, message);
+
+                mBuilder.setContentText(message);
+
+                if (sizeList > 1) {
+                    String sizeListMessage = sizeList.toString();
+                    String stacking = sizeList + " more";
+                    if (getString(extras, SUMMARY_TEXT) != null) {
+                        stacking = getString(extras, SUMMARY_TEXT);
+                        stacking = stacking.replace("%n%", sizeListMessage);
+                    }
+                    NotificationCompat.InboxStyle notificationInbox = new NotificationCompat.InboxStyle()
+                            .setBigContentTitle(getString(extras, TITLE))
+                            .setSummaryText(stacking);
+
+                    for (int i = messageList.size() - 1; i >= 0; i--) {
+                        notificationInbox.addLine(Html.fromHtml(messageList.get(i)));
+                    }
+
+                    mBuilder.setStyle(notificationInbox);
+                } else {
+                    NotificationCompat.BigTextStyle bigText = new NotificationCompat.BigTextStyle();
+                    if (message != null) {
+                        bigText.bigText(message);
+                        bigText.setBigContentTitle(getString(extras, TITLE));
+                        mBuilder.setStyle(bigText);
+                    }
                 }
-                NotificationCompat.InboxStyle notificationInbox = new NotificationCompat.InboxStyle()
-                        .setBigContentTitle(getString(extras, TITLE))
-                        .setSummaryText(stacking);
-
-                for (int i = messageList.size() - 1; i >= 0; i--) {
-                    notificationInbox.addLine(Html.fromHtml(messageList.get(i)));
+            } else if (STYLE_PICTURE.equals(style)) {
+                if (!summarize) {
+                    setNotification(notId, "");
                 }
 
-                mBuilder.setStyle(notificationInbox);
+                NotificationCompat.BigPictureStyle bigPicture = new NotificationCompat.BigPictureStyle();
+                bigPicture.bigPicture(getBitmapFromURL(getString(extras, PICTURE)));
+                bigPicture.setBigContentTitle(title);
+                bigPicture.setSummaryText(message);
+
+                mBuilder.setContentTitle(title);
+                mBuilder.setContentText(message);
+
+                mBuilder.setStyle(bigPicture);
             } else {
+                if (!summarize) {
+                    setNotification(notId, "");
+                }
+
                 NotificationCompat.BigTextStyle bigText = new NotificationCompat.BigTextStyle();
+
                 if (message != null) {
+                    mBuilder.setContentText(Html.fromHtml(message));
+
                     bigText.bigText(message);
-                    bigText.setBigContentTitle(getString(extras, TITLE));
+                    bigText.setBigContentTitle(title);
+
+                    String summaryText = getString(extras, SUMMARY_TEXT);
+                    if (summaryText != null) {
+                        bigText.setSummaryText(summaryText);
+                    }
+
                     mBuilder.setStyle(bigText);
                 }
-            }
-        } else if (STYLE_PICTURE.equals(style)) {
-            setNotification(notId, "");
-
-            NotificationCompat.BigPictureStyle bigPicture = new NotificationCompat.BigPictureStyle();
-            bigPicture.bigPicture(getBitmapFromURL(getString(extras, PICTURE)));
-            bigPicture.setBigContentTitle(getString(extras, TITLE));
-            bigPicture.setSummaryText(getString(extras, SUMMARY_TEXT));
-
-            mBuilder.setContentTitle(getString(extras, TITLE));
-            mBuilder.setContentText(message);
-
-            mBuilder.setStyle(bigPicture);
-        } else {
-            setNotification(notId, "");
-
-            NotificationCompat.BigTextStyle bigText = new NotificationCompat.BigTextStyle();
-
-            if (message != null) {
-                mBuilder.setContentText(Html.fromHtml(message));
-
-                bigText.bigText(message);
-                bigText.setBigContentTitle(getString(extras, TITLE));
-
-                String summaryText = getString(extras, SUMMARY_TEXT);
-                if (summaryText != null) {
-                    bigText.setSummaryText(summaryText);
+                /*
+                else {
+                    mBuilder.setContentText("<missing message content>");
                 }
-
-                mBuilder.setStyle(bigText);
+                */
             }
-            /*
-            else {
-                mBuilder.setContentText("<missing message content>");
-            }
-            */
         }
     }
 
@@ -423,11 +468,10 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
         }
     }
 
-    private void setNotificationLargeIcon(Bundle extras, String packageName, Resources resources, NotificationCompat.Builder mBuilder) {
-        String gcmLargeIcon = getString(extras, IMAGE); // from gcm
-        if (gcmLargeIcon != null) {
-            if (gcmLargeIcon.startsWith("http://") || gcmLargeIcon.startsWith("https://")) {
-                Bitmap bitmap = getBitmapFromURL(gcmLargeIcon);
+    private void setNotificationLargeIcon(String imageUri, String packageName, Resources resources, NotificationCompat.Builder mBuilder) {
+        if (imageUri != null) {
+            if (imageUri.startsWith("http://") || imageUri.startsWith("https://")) {
+                Bitmap bitmap = getBitmapFromURL(imageUri);
                 boolean circle = "true".equals(getString(extras, ICON_CIRCLE));
                 bitmap = formatLargeIcon(bitmap, circle);
                 mBuilder.setLargeIcon(bitmap);
@@ -436,13 +480,13 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
                 AssetManager assetManager = getAssets();
                 InputStream istr;
                 try {
-                    istr = assetManager.open(gcmLargeIcon);
+                    istr = assetManager.open(imageUri);
                     Bitmap bitmap = BitmapFactory.decodeStream(istr);
                     mBuilder.setLargeIcon(bitmap);
                     Log.d(LOG_TAG, "using assets large-icon from gcm");
                 } catch (IOException e) {
                     int largeIconId = 0;
-                    largeIconId = resources.getIdentifier(gcmLargeIcon, DRAWABLE, packageName);
+                    largeIconId = resources.getIdentifier(imageUri, DRAWABLE, packageName);
                     if (largeIconId != 0) {
                         Bitmap largeIconBitmap = BitmapFactory.decodeResource(resources, largeIconId);
                         mBuilder.setLargeIcon(largeIconBitmap);
@@ -516,11 +560,11 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
         return Bitmap.createScaledBitmap(bmp, width, height, true);
     }
 
-    private void setNotificationSmallIcon(Context context, Bundle extras, String packageName, Resources resources, NotificationCompat.Builder mBuilder, String localIcon) {
+    private void setNotificationSmallIcon(Context context, String iconUri, String packageName, Resources resources, NotificationCompat.Builder mBuilder, String localIcon) {
         int iconId = 0;
-        String icon = getString(extras, ICON);
-        if (icon != null) {
-            iconId = resources.getIdentifier(icon, DRAWABLE, packageName);
+
+        if (iconUri != null) {
+            iconId = resources.getIdentifier(iconUri, DRAWABLE, packageName);
             Log.d(LOG_TAG, "using icon from plugin options");
         }
         else if (localIcon != null) {
