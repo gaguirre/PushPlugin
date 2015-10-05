@@ -197,7 +197,8 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
          */
         if (!shouldSummarize) {
             String largeIconUri = getString(extras, IMAGE); // from gcm
-            setNotificationLargeIcon(largeIconUri, packageName, resources, mBuilder);
+            boolean roundAsCircle = "true".equals(getString(extras, ICON_CIRCLE));
+            setNotificationLargeIcon(largeIconUri, roundAsCircle, packageName, resources, mBuilder);
         }
 
         /*
@@ -468,12 +469,11 @@ public class GCMIntentService extends GCMBaseIntentService implements PushConsta
         }
     }
 
-    private void setNotificationLargeIcon(String imageUri, String packageName, Resources resources, NotificationCompat.Builder mBuilder) {
+    private void setNotificationLargeIcon(String imageUri, boolean roundAsCircle, String packageName, Resources resources, NotificationCompat.Builder mBuilder) {
         if (imageUri != null) {
             if (imageUri.startsWith("http://") || imageUri.startsWith("https://")) {
                 Bitmap bitmap = getBitmapFromURL(imageUri);
-                boolean circle = "true".equals(getString(extras, ICON_CIRCLE));
-                bitmap = formatLargeIcon(bitmap, circle);
+                bitmap = formatLargeIcon(bitmap, roundAsCircle);
                 mBuilder.setLargeIcon(bitmap);
                 Log.d(LOG_TAG, "using remote large-icon from gcm");
             } else {
